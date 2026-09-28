@@ -84,4 +84,25 @@ then `go install .`.
 
 ## Releasing
 
-Push a `v*` tag. The Release workflow builds with GoReleaser and signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` and `PASSPHRASE` repository secrets. The Terraform Registry picks up new GitHub releases automatically.
+1. Add the changes to `CHANGELOG.md`.
+2. Push a `v*` tag, for example `git tag -a v0.2.0 -m v0.2.0 && git push origin v0.2.0`.
+
+The Release workflow builds with GoReleaser and signs the checksums with the key in the `GPG_PRIVATE_KEY` and `PASSPHRASE` secrets (public key: [`signing-key.asc`](signing-key.asc)). The public Terraform Registry picks up each GitHub release automatically.
+
+### HCP Terraform and Terraform Enterprise private registry
+
+To also publish each release to your organization's private registry, add to the repository settings:
+
+- variable `TFC_ORGANIZATION`: the HCP Terraform organization name;
+- variable `TFC_HOSTNAME`: only for Terraform Enterprise, your host name;
+- secret `TFC_TOKEN`: a team API token with **Manage Private Registry**.
+
+To publish an existing release, run the Release workflow manually with its tag. Users of the private registry reference the provider as:
+
+```hcl
+gezor = {
+  source = "app.terraform.io/<organization>/gezor"
+}
+```
+
+`scripts/publish-private-registry.sh` does the same from a machine with the release files.

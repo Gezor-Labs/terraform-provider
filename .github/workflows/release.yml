@@ -1,17 +1,26 @@
 name: Release
 
 # Needs repository secrets GPG_PRIVATE_KEY (ASCII-armored) and PASSPHRASE.
-# Add the matching public key to the Terraform Registry namespace before the first release.
+# The public Terraform Registry ingests each GitHub release through its webhook.
+# To also publish to an HCP Terraform / Terraform Enterprise private registry, set the
+# repository variable TFC_ORGANIZATION (and TFC_HOSTNAME for Terraform Enterprise)
+# and the secret TFC_TOKEN.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish to the private registry, e.g. v0.1.0"
+        required: true
 
 permissions:
   contents: write
 
 jobs:
   goreleaser:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,3 +47,27 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+
+  private-registry:
+    name: HCP Terraform private registry
+    needs: goreleaser
+    if: >-
+      always() && vars.TFC_ORGANIZATION != '' &&
+      (needs.goreleaser.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release download "$TAG" --dir dist --pattern '*.zip' --pattern '*_SHA256SUMS' --pattern '*_SHA256SUMS.sig'
+      - name: Publish
+        env:
+          TFC_TOKEN: ${{ secrets.TFC_TOKEN }}
+          TFC_ORGANIZATION: ${{ vars.TFC_ORGANIZATION }}
+          TFC_HOSTNAME: ${{ vars.TFC_HOSTNAME }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: scripts/publish-private-registry.sh dist "$TAG"
