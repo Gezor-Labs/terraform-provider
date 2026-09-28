@@ -1,3 +1,9 @@
+## 0.1.1 (September 29, 2026)
+
+NOTES:
+
+* Documentation: resources and data sources are grouped by area in the Registry navigation, the overview follows the standard provider layout, and new guides cover getting started and importing existing resources.
+
 ## 0.1.0 (September 29, 2026)
 
 FEATURES:

@@ -1,0 +1,26 @@
+---
+page_title: "{{.Name}} ({{.Type}}) - Gezor"
+subcategory: "Organization"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+{{- if .HasExample }}
+
+## Example Usage
+
+{{ tffile .ExampleFile }}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}
+{{- if .HasImport }}
+
+## Import
+
+Import is supported using the following syntax. Append `@<workspace>` to import from a workspace other than the provider default.
+
+{{ codefile "shell" .ImportFile }}
+{{- end }}

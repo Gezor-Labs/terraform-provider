@@ -1,45 +1,122 @@
 ---
-page_title: "Gezor Provider"
+page_title: "Provider: Gezor"
 description: |-
-  Configure Gezor Cloud workspaces, security, encryption, AWS, clusters, apps, streaming and pipelines as code.
+  Use the Gezor provider to manage Gezor Cloud as code: workspaces, access, single sign-on, encryption, AWS, clusters, streaming and pipelines. Configure it with a Gezor service account API token.
 ---
 
 # Gezor Provider
 
-The Gezor provider configures [Gezor Cloud](https://gezor.com) with an API token. Everything you can set up in the portal can be managed here, except adding or removing people: invite people and assign their roles in the portal, or map identity provider groups to roles with `gezor_sso_group_mappings`.
+Use the Gezor provider to manage [Gezor Cloud](https://gezor.com) as code: workspaces, roles and settings, single sign-on, encryption keys, your AWS connection and data lake, clusters and their apps, Kafka topics, schemas, change data capture, Secure Access and pipelines. You must configure the provider with a Gezor API token before you can use it.
 
-## Authentication
+Use the navigation to the left to read about the available resources. There are currently 23 resources and 9 data sources available in the provider.
 
-1. In the portal, open **Organization → API tokens** and create a service account. Give it a role in every workspace (for example Admin), or pick a role per workspace.
-2. Create a token. It is shown once and starts with `gzr_sa_`.
-3. Export it as `GEZOR_TOKEN`, or set `token` in the provider block.
-
-Tokens can never manage people, API tokens or service accounts, even with the Admin role. Every change a token makes is recorded in **Settings → Audit** with the service account's name.
-
-## Workspaces
-
-A token works across the whole organization. Each request runs in one workspace:
-
-- the resource's `workspace` argument, if set;
-- otherwise the provider's `workspace` (or `GEZOR_WORKSPACE`);
-- otherwise the organization's main workspace.
-
-`workspace` accepts a workspace id or slug. Use a provider alias per workspace, or set `workspace` on individual resources.
-
-## Cluster commands
-
-Kafka topics and schema subjects are changed by the Gezor operator running on the cluster. The provider starts the command, then waits for the operator's answer (up to `command_timeout_seconds`, default 300). The cluster must be online, with the matching app turned on.
-
-## Importing
-
-Every resource can be imported. Composite ids use `/`, for example `terraform import gezor_kafka_topic.orders cl_123/orders`. Add `@<workspace>` to import from a workspace other than the provider's default: `terraform import gezor_role.analyst role_123@analytics`.
-
-## Rate limits
-
-Each token can make 600 requests a minute. The provider retries rate-limited and temporarily unavailable requests (`max_retries`, default 4).
+New to Gezor and Terraform? Follow the [Get started](guides/getting-started) guide to go from an empty workspace to a running cluster with Kafka topics.
 
 ## Example Usage
 
-{{ tffile "examples/provider/provider.tf" }}
+```terraform
+terraform {
+  required_providers {
+    gezor = {
+      source  = "gezor-labs/gezor"
+      version = "~> 0.1"
+    }
+  }
+}
+
+# Configure the Gezor provider. The token is read from GEZOR_TOKEN.
+provider "gezor" {
+  workspace = "production"
+}
+
+# Register a Kubernetes cluster
+resource "gezor_cluster" "prod" {
+  name   = "prod-eu"
+  region = "eu-central-1"
+}
+
+# Turn on Event Streams (Kafka)
+resource "gezor_cluster_app" "kafka" {
+  cluster_id = gezor_cluster.prod.id
+  app        = "kafka"
+}
+
+# Create a topic
+resource "gezor_kafka_topic" "orders" {
+  cluster_id = gezor_cluster.prod.id
+  name       = "orders"
+  partitions = 6
+  depends_on = [gezor_cluster_app.kafka]
+}
+```
+
+## Authentication and Configuration
+
+Configuration for the Gezor provider can come from these sources, in this order of precedence:
+
+1. Arguments in the provider block
+2. Environment variables
+
+### API tokens
+
+The provider authenticates with a **service account API token**. To create one:
+
+1. In the Gezor portal, open **Organization → API tokens**.
+2. Create a service account and give it a role in each workspace it should manage. Tick **Every workspace, including ones created later** if Terraform will create workspaces.
+3. Select **New token**, choose an expiry and copy the token. It starts with `gzr_sa_` and is shown once.
+
+Tokens act with their service account's role. They can never invite or remove people, or manage service accounts and tokens, even with the Admin role. Every change a token makes is recorded in the audit log under the service account's name.
+
+!> **Warning:** Hard-coded tokens are not recommended in any Terraform configuration and risk secret leakage should the file be committed to public version control.
+
+### Environment Variables
+
+```terraform
+provider "gezor" {}
+```
+
+```shell
+export GEZOR_TOKEN="gzr_sa_..."
+export GEZOR_WORKSPACE="production"
+terraform plan
+```
+
+| Variable | Argument | Default |
+|---|---|---|
+| `GEZOR_TOKEN` | `token` | none (required) |
+| `GEZOR_WORKSPACE` | `workspace` | the organization's main workspace |
+| `GEZOR_ENDPOINT` | `endpoint` | `https://app.gezor.cloud` |
+
+### Workspaces
+
+A token works across the whole organization, and each request runs in one workspace. The workspace is taken from the resource's `workspace` argument, then the provider's `workspace`, then the organization's main workspace. Both accept a workspace id or slug.
+
+To manage several workspaces in one configuration, set `workspace` on individual resources or declare one provider per workspace:
+
+```terraform
+provider "gezor" {
+  alias     = "analytics"
+  workspace = "analytics"
+}
+
+resource "gezor_role" "analyst" {
+  provider    = gezor.analytics
+  key         = "bi_analyst"
+  name        = "BI analyst"
+  permissions = ["clusters.read", "pipelines.read", "lineage.read"]
+}
+```
+
+### Cluster commands
+
+Kafka topics and schema subjects are changed by the Gezor operator running on the cluster. The provider sends the command, then waits for the operator's answer for up to `command_timeout_seconds` (300 seconds by default). The cluster must be online and the matching app turned on.
+
+### Retries and rate limits
+
+Each token can make 600 requests a minute. The provider retries rate-limited (`429`) and temporarily unavailable (`503`) responses, honouring `Retry-After`, up to `max_retries` times.
+
+## Importing existing resources
+
+Every resource supports `terraform import`, so an existing setup can be brought under Terraform. See [Importing existing resources](guides/importing) for the id format of each resource.
 
 {{ .SchemaMarkdown | trimspace }}

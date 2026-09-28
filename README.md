@@ -1,10 +1,15 @@
 # Terraform provider for Gezor Cloud
 
+[![Terraform Registry](https://img.shields.io/badge/registry-gezor--labs%2Fgezor-7B42BC?logo=terraform)](https://registry.terraform.io/providers/Gezor-Labs/gezor/latest)
+[![Release](https://img.shields.io/github/v/release/Gezor-Labs/terraform-provider-gezor)](https://github.com/Gezor-Labs/terraform-provider-gezor/releases)
+[![Test](https://github.com/Gezor-Labs/terraform-provider-gezor/actions/workflows/test.yml/badge.svg)](https://github.com/Gezor-Labs/terraform-provider-gezor/actions/workflows/test.yml)
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
+
 Configure [Gezor Cloud](https://gezor.com) as code: workspaces, roles, workspace settings, single sign-on, encryption keys, AWS, clusters and their apps, Kafka topics, schemas, change data capture, Secure Access, dbt projects and pipelines.
 
 The provider covers everything in the portal except adding and removing people. Invite people in the portal, or map identity provider groups to roles with `gezor_sso_group_mappings`.
 
-Documentation: [`docs/`](docs/index.md), and [Terraform](https://gezor.com/docs/terraform/) on gezor.com.
+Documentation: [Terraform Registry](https://registry.terraform.io/providers/Gezor-Labs/gezor/latest/docs), and [Terraform](https://gezor.com/docs/terraform/) on gezor.com.
 
 ## Quick start
 
