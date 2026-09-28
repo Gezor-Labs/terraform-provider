@@ -20,7 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/Gezor-Labs/terraform-provider/internal/client"
+	"github.com/Gezor-Labs/terraform-provider-gezor/internal/client"
 )
 
 func secondsDuration(n int64) time.Duration { return time.Duration(n) * time.Second }

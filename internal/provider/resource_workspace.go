@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/Gezor-Labs/terraform-provider/internal/client"
+	"github.com/Gezor-Labs/terraform-provider-gezor/internal/client"
 )
 
 var (

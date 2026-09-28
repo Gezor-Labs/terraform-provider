@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/Gezor-Labs/terraform-provider/internal/client"
+	"github.com/Gezor-Labs/terraform-provider-gezor/internal/client"
 )
 
 type awsConnectionSnapshot struct {

@@ -84,6 +84,4 @@ then `go install .`.
 
 ## Releasing
 
-Push a `v*` tag. The Release workflow builds with GoReleaser and signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` and `PASSPHRASE` repository secrets.
-
-The Terraform Registry only lists repositories named `terraform-provider-<name>`. To publish as `gezor-labs/gezor`, rename this repository to `terraform-provider-gezor` (GitHub keeps redirects from the old name), add the GPG public key to the registry namespace, and publish from [registry.terraform.io](https://registry.terraform.io/publish/provider).
+Push a `v*` tag. The Release workflow builds with GoReleaser and signs the checksums with the GPG key in the `GPG_PRIVATE_KEY` and `PASSPHRASE` repository secrets. The Terraform Registry picks up new GitHub releases automatically.

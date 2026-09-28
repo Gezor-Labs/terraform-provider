@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/Gezor-Labs/terraform-provider/internal/provider"
+	"github.com/Gezor-Labs/terraform-provider-gezor/internal/provider"
 )
 
 //go:generate go tool tfplugindocs generate --provider-name gezor

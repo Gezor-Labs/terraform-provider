@@ -1,4 +1,4 @@
-module github.com/Gezor-Labs/terraform-provider
+module github.com/Gezor-Labs/terraform-provider-gezor
 
 go 1.26.4
 
