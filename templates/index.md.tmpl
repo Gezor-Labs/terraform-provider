@@ -1,0 +1,45 @@
+---
+page_title: "Gezor Provider"
+description: |-
+  Configure Gezor Cloud workspaces, security, encryption, AWS, clusters, apps, streaming and pipelines as code.
+---
+
+# Gezor Provider
+
+The Gezor provider configures [Gezor Cloud](https://gezor.com) with an API token. Everything you can set up in the portal can be managed here, except adding or removing people: invite people and assign their roles in the portal, or map identity provider groups to roles with `gezor_sso_group_mappings`.
+
+## Authentication
+
+1. In the portal, open **Organization → API tokens** and create a service account. Give it a role in every workspace (for example Admin), or pick a role per workspace.
+2. Create a token. It is shown once and starts with `gzr_sa_`.
+3. Export it as `GEZOR_TOKEN`, or set `token` in the provider block.
+
+Tokens can never manage people, API tokens or service accounts, even with the Admin role. Every change a token makes is recorded in **Settings → Audit** with the service account's name.
+
+## Workspaces
+
+A token works across the whole organization. Each request runs in one workspace:
+
+- the resource's `workspace` argument, if set;
+- otherwise the provider's `workspace` (or `GEZOR_WORKSPACE`);
+- otherwise the organization's main workspace.
+
+`workspace` accepts a workspace id or slug. Use a provider alias per workspace, or set `workspace` on individual resources.
+
+## Cluster commands
+
+Kafka topics and schema subjects are changed by the Gezor operator running on the cluster. The provider starts the command, then waits for the operator's answer (up to `command_timeout_seconds`, default 300). The cluster must be online, with the matching app turned on.
+
+## Importing
+
+Every resource can be imported. Composite ids use `/`, for example `terraform import gezor_kafka_topic.orders cl_123/orders`. Add `@<workspace>` to import from a workspace other than the provider's default: `terraform import gezor_role.analyst role_123@analytics`.
+
+## Rate limits
+
+Each token can make 600 requests a minute. The provider retries rate-limited and temporarily unavailable requests (`max_retries`, default 4).
+
+## Example Usage
+
+{{ tffile "examples/provider/provider.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}
