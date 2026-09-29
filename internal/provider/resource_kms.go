@@ -60,7 +60,7 @@ func (r *kmsKeyResource) Metadata(_ context.Context, req resource.MetadataReques
 
 func (r *kmsKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "A customer managed encryption key. Make it the workspace default with `gezor_kms_default_key`. Destroying it schedules the key for deletion; the default key must be replaced first.",
+		MarkdownDescription: "A customer managed encryption key. Make it the workspace default with `gezor_kms_default_key`. Destroying it schedules the key for deletion; a key that is still the default cannot be deleted.",
 		Attributes: map[string]schema.Attribute{
 			"workspace": workspaceAttribute(),
 			"id":        idAttribute("Key id."),
@@ -68,8 +68,9 @@ func (r *kmsKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional: true, Computed: true, Default: stringdefault.StaticString("Customer managed key"),
 			},
 			"alias_name": schema.StringAttribute{
-				Optional: true, Computed: true, Default: stringdefault.StaticString(""),
-				MarkdownDescription: "Alias, for example `alias/lake`.",
+				Optional: true, Computed: true,
+				MarkdownDescription: "Alias, for example `alias/lake`. Gezor generates one when left out.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"enabled": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true)},
 			"key_material": schema.StringAttribute{
@@ -223,7 +224,7 @@ func (r *kmsDefaultKeyResource) Metadata(_ context.Context, req resource.Metadat
 
 func (r *kmsDefaultKeyResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "The workspace's default encryption key. Destroying it only removes it from Terraform state.",
+		MarkdownDescription: "The workspace's default encryption key. Destroying it switches the workspace back to the platform key. Do not combine with `gezor_aws_crypto_mode`, which also sets the default key.",
 		Attributes: map[string]schema.Attribute{
 			"workspace": workspaceAttribute(),
 			"id":        idAttribute("Always `default`."),
@@ -284,7 +285,15 @@ func (r *kmsDefaultKeyResource) Update(ctx context.Context, req resource.UpdateR
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
-func (r *kmsDefaultKeyResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
+func (r *kmsDefaultKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state kmsDefaultKeyModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.c.Post(ctx, "/api/aws/crypto/platform-keys", state.Workspace.ValueString(), map[string]any{}, nil); err != nil && !client.IsNotFound(err) {
+		apiError(&resp.Diagnostics, "switch back to the platform key", err)
+	}
 }
 
 func (r *kmsDefaultKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

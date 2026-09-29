@@ -192,7 +192,12 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 		id := f.id("cl_")
 		c := map[string]any{"id": id, "org_id": "org_1", "name": body["name"], "description": body["description"], "tags": body["tags"],
 			"environment": body["environment"], "region": body["region"], "hosting_mode": body["hosting_mode"], "status": "pending",
-			"online": false, "operator_namespace": body["operator_namespace"], "desired_state": map[string]any{"modules": map[string]any{}}}
+			"online": false, "operator_namespace": body["operator_namespace"], "desired_state": map[string]any{"modules": map[string]any{}},
+			"desired_version": float64(1), "reported_status": map[string]any{"applied_version": float64(0), "modules": map[string]any{}}}
+		if body["hosting_mode"] == "gezor_hosted" {
+			c["polls_until_online"] = 2
+			c["provision_progress"] = map[string]any{"done": false, "stage": "vcluster", "error": nil}
+		}
 		f.clusters[id] = c
 		writeJSON(w, 200, map[string]any{"cluster": c, "install_token": "gzr_it_secret", "install_token_id": "tok_1",
 			"install_token_expires_at": 1900000000, "install": map[string]any{"helm": "helm upgrade --install gzr-operator ..."}})
@@ -226,11 +231,48 @@ func normalizePerms(v any) []any {
 	return out
 }
 
+func asFloat(v any) float64 { f, _ := v.(float64); return f }
+
+// advanceHosted brings a hosted cluster online after a few polls, then has the operator
+// apply the latest settings one poll after they change.
+func (f *fakeAPI) advanceHosted(c map[string]any) {
+	if n, ok := c["polls_until_online"].(int); ok && n > 0 {
+		c["polls_until_online"] = n - 1
+		if n == 1 {
+			c["online"], c["status"] = true, "connected"
+			c["provision_progress"] = map[string]any{"done": true, "stage": "heartbeat", "error": nil}
+		}
+		return
+	}
+	if !asBool(c["online"]) {
+		return
+	}
+	rs := c["reported_status"].(map[string]any)
+	reported := rs["modules"].(map[string]any)
+	if asFloat(rs["applied_version"]) < asFloat(c["desired_version"]) {
+		if rs["pending"] == true {
+			rs["applied_version"], rs["pending"] = c["desired_version"], false
+			for app, m := range c["desired_state"].(map[string]any)["modules"].(map[string]any) {
+				if asBool(asMap(m)["enabled"]) {
+					reported[app] = map[string]any{"phase": "Ready"}
+				}
+			}
+		} else {
+			rs["pending"] = true
+			for app := range reported {
+				reported[app] = map[string]any{"phase": "Progressing"}
+			}
+		}
+	}
+	f.requests = append(f.requests, "poll "+c["id"].(string))
+}
+
 func (f *fakeAPI) cluster(w http.ResponseWriter, r *http.Request, c map[string]any, rest []string, body map[string]any) {
 	cid := c["id"].(string)
 	modules := c["desired_state"].(map[string]any)["modules"].(map[string]any)
 	switch {
 	case len(rest) == 0 && r.Method == "GET":
+		f.advanceHosted(c)
 		writeJSON(w, 200, map[string]any{"cluster": c})
 	case len(rest) == 0 && r.Method == "PATCH":
 		for k, v := range body {
@@ -252,6 +294,7 @@ func (f *fakeAPI) cluster(w http.ResponseWriter, r *http.Request, c map[string]a
 			mod[k] = v
 		}
 		modules[rest[1]] = mod
+		c["desired_version"] = asFloat(c["desired_version"]) + 1
 		writeJSON(w, 200, map[string]any{"cluster": c})
 
 	case len(rest) == 3 && rest[0] == "kafka" && rest[1] == "topics" && r.Method == "POST":

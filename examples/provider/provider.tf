@@ -2,7 +2,7 @@ terraform {
   required_providers {
     gezor = {
       source  = "gezor-labs/gezor"
-      version = "~> 0.1"
+      version = "~> 0.1.0"
     }
   }
 }

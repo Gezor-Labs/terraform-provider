@@ -4,6 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/Gezor-Labs/terraform-provider-gezor)](https://github.com/Gezor-Labs/terraform-provider-gezor/releases)
 [![Test](https://github.com/Gezor-Labs/terraform-provider-gezor/actions/workflows/test.yml/badge.svg)](https://github.com/Gezor-Labs/terraform-provider-gezor/actions/workflows/test.yml)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue)](LICENSE)
+![Status: Beta](https://img.shields.io/badge/status-beta-orange)
+
+> **Beta:** resources and arguments may still change between minor versions before 1.0. Breaking changes are listed in the [changelog](CHANGELOG.md). Pin a minor version, for example `~> 0.1.0`.
 
 Configure [Gezor Cloud](https://gezor.com) as code: workspaces, roles, workspace settings, single sign-on, encryption keys, AWS, clusters and their apps, Kafka topics, schemas, change data capture, Secure Access, dbt projects and pipelines.
 
@@ -27,7 +30,7 @@ terraform {
   required_providers {
     gezor = {
       source  = "gezor-labs/gezor"
-      version = "~> 0.1"
+      version = "~> 0.1.0"
     }
   }
 }

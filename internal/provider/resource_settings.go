@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
@@ -97,10 +96,7 @@ func optInt(desc string) schema.Int64Attribute {
 }
 
 func optStr(desc string) schema.StringAttribute {
-	return schema.StringAttribute{
-		Optional: true, Computed: true, MarkdownDescription: desc,
-		PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
-	}
+	return schema.StringAttribute{Optional: true, Computed: true, MarkdownDescription: desc}
 }
 
 func (r *workspaceSettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -198,7 +194,9 @@ func putInt(body map[string]any, key string, v types.Int64) {
 }
 
 // apply sends only the values that are set in the plan and differ from the server.
-func (r *workspaceSettingsResource) apply(ctx context.Context, plan *workspaceSettingsModel, diags *diag.Diagnostics) {
+// Name, description and icon are sent only when set in this resource's configuration,
+// because gezor_workspace manages the same fields.
+func (r *workspaceSettingsResource) apply(ctx context.Context, plan, config *workspaceSettingsModel, diags *diag.Diagnostics) {
 	ws := plan.Workspace.ValueString()
 	cur, err := r.snapshot(ctx, ws)
 	if err != nil {
@@ -206,13 +204,13 @@ func (r *workspaceSettingsResource) apply(ctx context.Context, plan *workspaceSe
 		return
 	}
 	general := map[string]any{}
-	if known(plan.Name) && plan.Name.ValueString() != cur.Workspace.Name {
+	if known(config.Name) && plan.Name.ValueString() != cur.Workspace.Name {
 		general["name"] = plan.Name.ValueString()
 	}
-	if known(plan.Description) && plan.Description.ValueString() != cur.Workspace.Description {
+	if known(config.Description) && plan.Description.ValueString() != cur.Workspace.Description {
 		general["description"] = plan.Description.ValueString()
 	}
-	if known(plan.Icon) && plan.Icon.ValueString() != cur.Workspace.Icon {
+	if known(config.Icon) && plan.Icon.ValueString() != cur.Workspace.Icon {
 		general["icon"] = plan.Icon.ValueString()
 	}
 	if len(general) > 0 {
@@ -261,12 +259,13 @@ func (r *workspaceSettingsResource) apply(ctx context.Context, plan *workspaceSe
 }
 
 func (r *workspaceSettingsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan workspaceSettingsModel
+	var plan, config workspaceSettingsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.apply(ctx, &plan, &resp.Diagnostics)
+	r.apply(ctx, &plan, &config, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -289,12 +288,13 @@ func (r *workspaceSettingsResource) Read(ctx context.Context, req resource.ReadR
 }
 
 func (r *workspaceSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan workspaceSettingsModel
+	var plan, config workspaceSettingsModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.apply(ctx, &plan, &resp.Diagnostics)
+	r.apply(ctx, &plan, &config, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

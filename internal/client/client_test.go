@@ -153,6 +153,22 @@ func TestWaitCommandErrors(t *testing.T) {
 	}
 }
 
+func TestWaitCommandExpiredThenReady(t *testing.T) {
+	var polls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&polls, 1) == 1 {
+			_, _ = w.Write([]byte(`{"status":"expired","error":"schema registry action expired or unknown"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ready","result":{"ok":true}}`))
+	}))
+	defer srv.Close()
+	res, err := testClient(srv.URL).WaitCommand(context.Background(), "/p", "")
+	if err != nil || string(res.Result) != `{"ok":true}` || polls != 2 {
+		t.Fatalf("got %v after %d polls", err, polls)
+	}
+}
+
 func TestWaitCommandTimeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"pending"}`))

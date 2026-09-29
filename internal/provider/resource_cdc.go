@@ -115,7 +115,9 @@ func (r *cdcInstanceResource) Create(ctx context.Context, req resource.CreateReq
 	var out struct {
 		Instance map[string]any `json:"instance"`
 	}
-	if err := r.c.Post(ctx, clusterPath(plan.ClusterID.ValueString())+"/cdc/instances", plan.Workspace.ValueString(), body, &out); err != nil {
+	if err := withClusterLock(plan.ClusterID.ValueString(), func() error {
+		return r.c.Post(ctx, clusterPath(plan.ClusterID.ValueString())+"/cdc/instances", plan.Workspace.ValueString(), body, &out)
+	}); err != nil {
 		apiError(&resp.Diagnostics, "create CDC instance", err)
 		return
 	}
@@ -154,7 +156,10 @@ func (r *cdcInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 		Instance map[string]any `json:"instance"`
 	}
 	p := cdcInstancePath(plan.ClusterID.ValueString(), plan.InstanceID.ValueString())
-	if err := r.c.Put(ctx, p, plan.Workspace.ValueString(), r.body(ctx, &plan, &resp.Diagnostics), &out); err != nil {
+	body := r.body(ctx, &plan, &resp.Diagnostics)
+	if err := withClusterLock(plan.ClusterID.ValueString(), func() error {
+		return r.c.Put(ctx, p, plan.Workspace.ValueString(), body, &out)
+	}); err != nil {
 		apiError(&resp.Diagnostics, "update CDC instance", err)
 		return
 	}
@@ -169,7 +174,9 @@ func (r *cdcInstanceResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 	p := cdcInstancePath(state.ClusterID.ValueString(), state.InstanceID.ValueString())
-	if err := r.c.Delete(ctx, p, state.Workspace.ValueString(), nil); err != nil && !client.IsNotFound(err) {
+	if err := withClusterLock(state.ClusterID.ValueString(), func() error {
+		return r.c.Delete(ctx, p, state.Workspace.ValueString(), nil)
+	}); err != nil && !client.IsNotFound(err) {
 		apiError(&resp.Diagnostics, "delete CDC instance", err)
 	}
 }
@@ -343,7 +350,10 @@ func (r *cdcConnectorResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.c.Post(ctx, r.connectorPath(&plan), plan.Workspace.ValueString(), r.body(ctx, &plan, &resp.Diagnostics), nil); err != nil {
+	body := r.body(ctx, &plan, &resp.Diagnostics)
+	if err := withClusterLock(plan.ClusterID.ValueString(), func() error {
+		return r.c.Post(ctx, r.connectorPath(&plan), plan.Workspace.ValueString(), body, nil)
+	}); err != nil {
 		apiError(&resp.Diagnostics, "create CDC connector", err)
 		return
 	}
@@ -382,7 +392,10 @@ func (r *cdcConnectorResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 	p := r.connectorPath(&plan) + "/" + client.PathEscape(plan.Name.ValueString())
-	if err := r.c.Put(ctx, p, plan.Workspace.ValueString(), r.body(ctx, &plan, &resp.Diagnostics), nil); err != nil {
+	body := r.body(ctx, &plan, &resp.Diagnostics)
+	if err := withClusterLock(plan.ClusterID.ValueString(), func() error {
+		return r.c.Put(ctx, p, plan.Workspace.ValueString(), body, nil)
+	}); err != nil {
 		apiError(&resp.Diagnostics, "update CDC connector", err)
 		return
 	}
@@ -402,7 +415,9 @@ func (r *cdcConnectorResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 	p := r.connectorPath(&state) + "/" + client.PathEscape(state.Name.ValueString())
-	if err := r.c.Delete(ctx, p, state.Workspace.ValueString(), nil); err != nil && !client.IsNotFound(err) {
+	if err := withClusterLock(state.ClusterID.ValueString(), func() error {
+		return r.c.Delete(ctx, p, state.Workspace.ValueString(), nil)
+	}); err != nil && !client.IsNotFound(err) {
 		apiError(&resp.Diagnostics, "delete CDC connector", err)
 	}
 }

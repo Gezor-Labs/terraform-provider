@@ -79,8 +79,10 @@ func (r *kafkaTopicResource) Schema(_ context.Context, _ resource.SchemaRequest,
 func (r *kafkaTopicResource) run(ctx context.Context, m *kafkaTopicModel, op string, body map[string]any) (*client.CommandResult, error) {
 	cid := m.ClusterID.ValueString()
 	body["topic"] = m.Name.ValueString()
-	return r.c.RunCommand(ctx, "POST", clusterPath(cid)+"/kafka/topics/"+op, m.Workspace.ValueString(), body,
-		func(rid string) string { return clusterPath(cid) + "/kafka/topic-actions/" + client.PathEscape(rid) })
+	return retryWhileAppStarts(ctx, func() (*client.CommandResult, error) {
+		return r.c.RunCommand(ctx, "POST", clusterPath(cid)+"/kafka/topics/"+op, m.Workspace.ValueString(), body,
+			func(rid string) string { return clusterPath(cid) + "/kafka/topic-actions/" + client.PathEscape(rid) })
+	})
 }
 
 func (r *kafkaTopicResource) describe(ctx context.Context, m *kafkaTopicModel) (*topicDescription, error) {
@@ -259,10 +261,12 @@ func (r *schemaSubjectResource) subjectPath(m *schemaSubjectModel) string {
 
 func (r *schemaSubjectResource) run(ctx context.Context, m *schemaSubjectModel, method, p string, body any) (*client.CommandResult, error) {
 	cid := m.ClusterID.ValueString()
-	return r.c.RunCommand(ctx, method, p, m.Workspace.ValueString(), body,
-		func(rid string) string {
-			return clusterPath(cid) + "/schema-registry/actions/" + client.PathEscape(rid)
-		})
+	return retryWhileAppStarts(ctx, func() (*client.CommandResult, error) {
+		return r.c.RunCommand(ctx, method, p, m.Workspace.ValueString(), body,
+			func(rid string) string {
+				return clusterPath(cid) + "/schema-registry/actions/" + client.PathEscape(rid)
+			})
+	})
 }
 
 func (r *schemaSubjectResource) describe(ctx context.Context, m *schemaSubjectModel) (*subjectDescription, error) {
@@ -277,19 +281,27 @@ func (r *schemaSubjectResource) describe(ctx context.Context, m *schemaSubjectMo
 	return &d, nil
 }
 
+// canonicalSchema returns JSON schemas in the form `jsonencode` produces (sorted keys, compact),
+// and any other schema text trimmed.
+func canonicalSchema(s string) string {
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil || dec.More() {
+		return strings.TrimSpace(s)
+	}
+	return encodeJSON(v)
+}
+
 // sameSchema compares schemas ignoring JSON formatting.
 func sameSchema(a, b string) bool {
-	var ja, jb any
-	if json.Unmarshal([]byte(a), &ja) == nil && json.Unmarshal([]byte(b), &jb) == nil {
-		return encodeJSON(ja) == encodeJSON(jb)
-	}
-	return strings.TrimSpace(a) == strings.TrimSpace(b)
+	return canonicalSchema(a) == canonicalSchema(b)
 }
 
 func (r *schemaSubjectResource) apply(m *schemaSubjectModel, d *subjectDescription) {
 	m.ID = strValue(m.ClusterID.ValueString() + "/" + m.Subject.ValueString())
 	if !known(m.Schema) || !sameSchema(m.Schema.ValueString(), d.Schema) {
-		m.Schema = strValue(d.Schema)
+		m.Schema = strValue(canonicalSchema(d.Schema))
 	}
 	if d.SchemaType != "" {
 		m.SchemaType = strValue(d.SchemaType)

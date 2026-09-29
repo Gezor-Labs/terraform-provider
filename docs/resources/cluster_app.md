@@ -3,11 +3,14 @@ page_title: "gezor_cluster_app (Resource) - Gezor"
 subcategory: "Clusters"
 description: |-
   Turns on and configures one app on a cluster. config uses the same fields as the portal's app settings; leave a field out to use its default. Destroying the resource turns the app off, which fails while deletion_protection is on.
+  Some apps need another app first; add depends_on so Terraform turns them on in order and off in reverse: schemaRegistry, connect and flink need kafka; iceberg needs garage; spark and trino need iceberg.
 ---
 
 # gezor_cluster_app (Resource)
 
 Turns on and configures one app on a cluster. `config` uses the same fields as the portal's app settings; leave a field out to use its default. Destroying the resource turns the app off, which fails while `deletion_protection` is on.
+
+Some apps need another app first; add `depends_on` so Terraform turns them on in order and off in reverse: `schemaRegistry`, `connect` and `flink` need `kafka`; `iceberg` needs `garage`; `spark` and `trino` need `iceberg`.
 
 ## Example Usage
 
@@ -46,6 +49,7 @@ resource "gezor_cluster_app" "connect" {
 - `config` (String) App settings as JSON, for example `jsonencode({ replicas = 3 })`.
 - `deletion_protection` (Boolean) Block turning the app off. Set to `false` and apply before destroying. Gezor turns it back on after an hour.
 - `enabled` (Boolean)
+- `wait_for_ready` (Boolean) Wait until the app reports Ready with these settings (up to 20 minutes). Skipped while the cluster is offline, for example before the operator is installed.
 - `workspace` (String) Workspace id or slug. Defaults to the provider's `workspace`. Changing it recreates the resource.
 
 ### Read-Only

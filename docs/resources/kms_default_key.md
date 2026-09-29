@@ -2,12 +2,12 @@
 page_title: "gezor_kms_default_key (Resource) - Gezor"
 subcategory: "Key Management"
 description: |-
-  The workspace's default encryption key. Destroying it only removes it from Terraform state.
+  The workspace's default encryption key. Destroying it switches the workspace back to the platform key. Do not combine with gezor_aws_crypto_mode, which also sets the default key.
 ---
 
 # gezor_kms_default_key (Resource)
 
-The workspace's default encryption key. Destroying it only removes it from Terraform state.
+The workspace's default encryption key. Destroying it switches the workspace back to the platform key. Do not combine with `gezor_aws_crypto_mode`, which also sets the default key.
 
 ## Example Usage
 

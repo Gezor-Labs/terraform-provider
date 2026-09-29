@@ -2,12 +2,12 @@
 page_title: "gezor_aws_crypto_mode (Resource) - Gezor"
 subcategory: "AWS"
 description: |-
-  Chooses who manages the key that protects the workspace's data key: Gezor (platform) or you (customer). Destroying it only removes it from Terraform state and keeps the current mode.
+  Chooses who manages the key that protects the workspace's data key: Gezor (platform) or you (customer). Destroying it only removes it from Terraform state and keeps the current mode. customer mode creates a key and makes it the default, so use either this or gezor_kms_key with gezor_kms_default_key, not both.
 ---
 
 # gezor_aws_crypto_mode (Resource)
 
-Chooses who manages the key that protects the workspace's data key: Gezor (`platform`) or you (`customer`). Destroying it only removes it from Terraform state and keeps the current mode.
+Chooses who manages the key that protects the workspace's data key: Gezor (`platform`) or you (`customer`). Destroying it only removes it from Terraform state and keeps the current mode. `customer` mode creates a key and makes it the default, so use either this or `gezor_kms_key` with `gezor_kms_default_key`, not both.
 
 ## Example Usage
 

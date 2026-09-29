@@ -6,6 +6,8 @@ description: |-
 
 # Gezor Provider
 
+~> **Beta:** The Gezor provider is in beta. Resources and arguments may still change between minor versions before 1.0; breaking changes are listed in the [changelog](https://github.com/Gezor-Labs/terraform-provider-gezor/blob/main/CHANGELOG.md). Pin a minor version, for example `~> 0.1.0`, and report problems on [GitHub](https://github.com/Gezor-Labs/terraform-provider-gezor/issues).
+
 Use the Gezor provider to manage [Gezor Cloud](https://gezor.com) as code: workspaces, roles and settings, single sign-on, encryption keys, your AWS connection and data lake, clusters and their apps, Kafka topics, schemas, change data capture, Secure Access and pipelines. You must configure the provider with a Gezor API token before you can use it.
 
 Use the navigation to the left to read about the available resources. There are currently 23 resources and 9 data sources available in the provider.
@@ -19,7 +21,7 @@ terraform {
   required_providers {
     gezor = {
       source  = "gezor-labs/gezor"
-      version = "~> 0.1"
+      version = "~> 0.1.0"
     }
   }
 }

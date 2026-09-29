@@ -2,12 +2,12 @@
 page_title: "gezor_kms_key (Resource) - Gezor"
 subcategory: "Key Management"
 description: |-
-  A customer managed encryption key. Make it the workspace default with gezor_kms_default_key. Destroying it schedules the key for deletion; the default key must be replaced first.
+  A customer managed encryption key. Make it the workspace default with gezor_kms_default_key. Destroying it schedules the key for deletion; a key that is still the default cannot be deleted.
 ---
 
 # gezor_kms_key (Resource)
 
-A customer managed encryption key. Make it the workspace default with `gezor_kms_default_key`. Destroying it schedules the key for deletion; the default key must be replaced first.
+A customer managed encryption key. Make it the workspace default with `gezor_kms_default_key`. Destroying it schedules the key for deletion; a key that is still the default cannot be deleted.
 
 ## Example Usage
 
@@ -23,7 +23,7 @@ resource "gezor_kms_key" "lake" {
 
 ### Optional
 
-- `alias_name` (String) Alias, for example `alias/lake`.
+- `alias_name` (String) Alias, for example `alias/lake`. Gezor generates one when left out.
 - `description` (String)
 - `enabled` (Boolean)
 - `key_material` (String, Sensitive) Base64 key material to import. Leave out to have Gezor generate the key. Changing it creates a new key.

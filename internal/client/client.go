@@ -18,6 +18,8 @@ import (
 const (
 	WorkspaceHeader = "X-GZR-Workspace"
 	DefaultEndpoint = "https://app.gezor.cloud"
+
+	expiredRetries = 2
 )
 
 type Client struct {
@@ -268,6 +270,7 @@ func (c *Client) WaitCommand(ctx context.Context, pollPath, workspace string) (*
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	expired := 0
 	for {
 		var res CommandResult
 		if err := c.Get(ctx, pollPath, workspace, &res); err != nil {
@@ -289,6 +292,14 @@ func (c *Client) WaitCommand(ctx context.Context, pollPath, workspace string) (*
 				msg = "the cluster operator reported an error"
 			}
 			return &res, fmt.Errorf("%s", msg)
+		case "expired":
+			// The API reports "expired" when a poll lands between the operator
+			// finishing the command and its result becoming readable.
+			expired++
+			if expired <= expiredRetries {
+				break
+			}
+			fallthrough
 		default:
 			msg := res.Error
 			if msg == "" {

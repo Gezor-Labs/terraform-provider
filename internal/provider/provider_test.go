@@ -2,8 +2,12 @@ package provider
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/Gezor-Labs/terraform-provider-gezor/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -145,5 +149,44 @@ func TestSameSchema(t *testing.T) {
 	}
 	if !sameSchema("syntax = \"proto3\";\n", "syntax = \"proto3\";") {
 		t.Error("protobuf text should compare trimmed")
+	}
+}
+
+func TestCanonicalSchema(t *testing.T) {
+	registry := `{"type":"record","name":"Order","fields":[{"name":"id","type":"string"},{"name":"n","type":"long","default":12345678901234567890}]}`
+	want := `{"fields":[{"name":"id","type":"string"},{"default":12345678901234567890,"name":"n","type":"long"}],"name":"Order","type":"record"}`
+	if got := canonicalSchema(registry); got != want {
+		t.Fatalf("got %s", got)
+	}
+	if !sameSchema(registry, want) || sameSchema(registry, `{"type":"record"}`) {
+		t.Fatal("sameSchema mismatch")
+	}
+	proto := "  syntax = \"proto3\";\nmessage Order { string id = 1; }\n"
+	if got := canonicalSchema(proto); got != strings.TrimSpace(proto) {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRetryWhileAppStarts(t *testing.T) {
+	defer func(d time.Duration) { waitPollInterval = d }(waitPollInterval)
+	waitPollInterval = time.Millisecond
+	calls := 0
+	_, err := retryWhileAppStarts(context.Background(), func() (*client.CommandResult, error) {
+		calls++
+		if calls < 3 {
+			return nil, errors.New(`register schema: Post "http://gzr-schema-registry:8081/subjects/x/versions": dial tcp 10.43.0.1:8081: connect: connection refused`)
+		}
+		return &client.CommandResult{Status: "ready"}, nil
+	})
+	if err != nil || calls != 3 {
+		t.Fatalf("got %v after %d calls", err, calls)
+	}
+	calls = 0
+	_, err = retryWhileAppStarts(context.Background(), func() (*client.CommandResult, error) {
+		calls++
+		return nil, errors.New("topic already exists")
+	})
+	if err == nil || calls != 1 {
+		t.Fatalf("got %v after %d calls", err, calls)
 	}
 }

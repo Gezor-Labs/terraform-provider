@@ -357,7 +357,7 @@ func (r *awsCryptoModeResource) Metadata(_ context.Context, req resource.Metadat
 
 func (r *awsCryptoModeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Chooses who manages the key that protects the workspace's data key: Gezor (`platform`) or you (`customer`). Destroying it only removes it from Terraform state and keeps the current mode.",
+		MarkdownDescription: "Chooses who manages the key that protects the workspace's data key: Gezor (`platform`) or you (`customer`). Destroying it only removes it from Terraform state and keeps the current mode. `customer` mode creates a key and makes it the default, so use either this or `gezor_kms_key` with `gezor_kms_default_key`, not both.",
 		Attributes: map[string]schema.Attribute{
 			"workspace": workspaceAttribute(),
 			"id":        idAttribute("Always `crypto`."),

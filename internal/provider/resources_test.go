@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -211,6 +212,53 @@ resource "gezor_cluster_app" "flink" {
 `},
 			{Config: base},
 		},
+	})
+}
+
+func TestAccHostedClusterWaits(t *testing.T) {
+	f, srv := newFakeAPI(t)
+	prev := waitPollInterval
+	waitPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { waitPollInterval = prev })
+	cfg := providerBlock(srv.URL) + `
+resource "gezor_cluster" "h" {
+  name         = "h"
+  region       = "eu-central-1"
+  hosting_mode = "gezor_hosted"
+}
+
+resource "gezor_cluster_app" "kafka" {
+  cluster_id          = gezor_cluster.h.id
+  app                 = "kafka"
+  deletion_protection = false
+}
+
+resource "gezor_kafka_topic" "t" {
+  cluster_id = gezor_cluster.h.id
+  name       = "t"
+  partitions = 1
+  depends_on = [gezor_cluster_app.kafka]
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: testProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: cfg,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("gezor_cluster.h", "online", "true"),
+				func(*terraform.State) error {
+					f.mu.Lock()
+					defer f.mu.Unlock()
+					for _, c := range f.clusters {
+						rs := c["reported_status"].(map[string]any)
+						if asFloat(rs["applied_version"]) < asFloat(c["desired_version"]) {
+							return fmt.Errorf("kafka settings not applied before the topic was created")
+						}
+					}
+					return nil
+				},
+			),
+		}},
 	})
 }
 

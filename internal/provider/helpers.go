@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -254,6 +255,18 @@ func decodeJSONObject(s string) (map[string]any, error) {
 func encodeJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+var clusterLocks sync.Map
+
+// withClusterLock serializes changes to a cluster's desired state. The API rewrites the whole
+// desired state on every app or CDC change, so parallel changes to one cluster can overwrite each other.
+func withClusterLock(clusterID string, fn func() error) error {
+	v, _ := clusterLocks.LoadOrStore(clusterID, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
 }
 
 func asMap(v any) map[string]any {

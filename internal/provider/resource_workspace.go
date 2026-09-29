@@ -145,7 +145,14 @@ func (r *workspaceResource) Delete(ctx context.Context, req resource.DeleteReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	p := "/api/tenants/" + client.PathEscape(state.ID.ValueString()) + "?confirm_name=" + url.QueryEscape(state.Name.ValueString())
+	var cur workspaceModel
+	if err := r.read(ctx, state.ID.ValueString(), &cur); err != nil {
+		if !client.IsNotFound(err) {
+			apiError(&resp.Diagnostics, "read workspace", err)
+		}
+		return
+	}
+	p := "/api/tenants/" + client.PathEscape(state.ID.ValueString()) + "?confirm_name=" + url.QueryEscape(cur.Name.ValueString())
 	if err := r.c.Delete(ctx, p, "", nil); err != nil && !client.IsNotFound(err) {
 		apiError(&resp.Diagnostics, "delete workspace", err)
 	}

@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -39,9 +41,103 @@ type apiCluster struct {
 	DesiredState      struct {
 		Modules map[string]any `json:"modules"`
 	} `json:"desired_state"`
+	DesiredVersion    int64 `json:"desired_version"`
+	ProvisionProgress *struct {
+		Done  bool   `json:"done"`
+		Error any    `json:"error"`
+		Stage string `json:"stage"`
+	} `json:"provision_progress"`
+	ReportedStatus struct {
+		Message        string         `json:"message"`
+		AppliedVersion any            `json:"applied_version"`
+		Modules        map[string]any `json:"modules"`
+	} `json:"reported_status"`
 }
 
+const (
+	clusterOnlineTimeout = 30 * time.Minute
+	appReadyTimeout      = 20 * time.Minute
+	appStartTimeout      = 3 * time.Minute
+)
+
+var waitPollInterval = 10 * time.Second
+
 func clusterPath(id string) string { return "/api/clusters/" + client.PathEscape(id) }
+
+// pollCluster calls done with the cluster every waitPollInterval until it returns true or an error, or timeout passes.
+func pollCluster(ctx context.Context, c *client.Client, workspace, id string, timeout time.Duration,
+	done func(*apiCluster) (bool, error), describe func(*apiCluster) string) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		cl, err := getCluster(ctx, c, workspace, id)
+		if err != nil {
+			return err
+		}
+		ok, err := done(cl)
+		if err != nil || ok {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s: %s", timeout, describe(cl))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(waitPollInterval):
+		}
+	}
+}
+
+func waitClusterOnline(ctx context.Context, c *client.Client, workspace, id string) error {
+	return pollCluster(ctx, c, workspace, id, clusterOnlineTimeout, func(cl *apiCluster) (bool, error) {
+		if p := cl.ProvisionProgress; p != nil && p.Error != nil && asString(p.Error) != "" {
+			return false, fmt.Errorf("provisioning failed at %q: %s", p.Stage, asString(p.Error))
+		}
+		return cl.Online, nil
+	}, func(cl *apiCluster) string {
+		stage := ""
+		if cl.ProvisionProgress != nil {
+			stage = cl.ProvisionProgress.Stage
+		}
+		return fmt.Sprintf("cluster is %s (stage %q)", cl.Status, stage)
+	})
+}
+
+// waitAppReady waits until the operator has applied the latest settings and reports the app Ready.
+// It returns at once while the cluster is offline, for example before the operator is installed.
+func waitAppReady(ctx context.Context, c *client.Client, workspace, clusterID, app string) error {
+	return pollCluster(ctx, c, workspace, clusterID, appReadyTimeout, func(cl *apiCluster) (bool, error) {
+		if !cl.Online {
+			return true, nil
+		}
+		phase := asString(asMap(cl.ReportedStatus.Modules[app])["phase"])
+		return phase == "Ready" && asInt(cl.ReportedStatus.AppliedVersion) >= cl.DesiredVersion, nil
+	}, func(cl *apiCluster) string {
+		return fmt.Sprintf("%s is %q (%s)", app, asString(asMap(cl.ReportedStatus.Modules[app])["phase"]), cl.ReportedStatus.Message)
+	})
+}
+
+// retryWhileAppStarts retries an operator command while the app it talks to refuses connections.
+// Some apps report Ready before their service accepts connections.
+func retryWhileAppStarts(ctx context.Context, run func() (*client.CommandResult, error)) (*client.CommandResult, error) {
+	deadline := time.Now().Add(appStartTimeout)
+	for {
+		res, err := run()
+		if err == nil || !appStarting(err) || time.Now().After(deadline) {
+			return res, err
+		}
+		select {
+		case <-ctx.Done():
+			return res, err
+		case <-time.After(waitPollInterval):
+		}
+	}
+}
+
+func appStarting(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") || strings.Contains(msg, "no such host")
+}
 
 func getCluster(ctx context.Context, c *client.Client, workspace, id string) (*apiCluster, error) {
 	var out struct {
@@ -89,6 +185,7 @@ type clusterModel struct {
 	InstallToken      types.String `tfsdk:"install_token"`
 	InstallExpiresAt  types.Int64  `tfsdk:"install_token_expires_at"`
 	InstallCommand    types.String `tfsdk:"install_command"`
+	WaitForOnline     types.Bool   `tfsdk:"wait_for_online"`
 }
 
 func (r *clusterResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -135,6 +232,10 @@ func (r *clusterResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"install_command": schema.StringAttribute{
 				Computed: true, Sensitive: true, PlanModifiers: keep,
 				MarkdownDescription: "Helm command that installs the operator (`byoc` only). Contains secrets.",
+			},
+			"wait_for_online": schema.BoolAttribute{
+				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				MarkdownDescription: "For `gezor_hosted`, wait until the cluster is provisioned and connected (up to 30 minutes) so apps can be turned on in the same apply.",
 			},
 		},
 	}
@@ -187,6 +288,18 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	if out.Install != nil {
 		plan.InstallCommand = strValue(out.Install.Helm)
 	}
+	if plan.HostingMode.ValueString() == "gezor_hosted" && plan.WaitForOnline.ValueBool() {
+		if err := waitClusterOnline(ctx, r.c, ws, out.Cluster.ID); err != nil {
+			// Keep the cluster in state so it can be retried or destroyed.
+			plan.ID = strValue(out.Cluster.ID)
+			if c, gerr := getCluster(ctx, r.c, ws, out.Cluster.ID); gerr == nil {
+				r.fill(ctx, &plan, c, &resp.Diagnostics)
+			}
+			resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+			apiError(&resp.Diagnostics, "wait for cluster "+plan.Name.ValueString()+" to come online", err)
+			return
+		}
+	}
 	c, err := getCluster(ctx, r.c, ws, out.Cluster.ID)
 	if err != nil {
 		apiError(&resp.Diagnostics, "read cluster", err)
@@ -216,6 +329,9 @@ func (r *clusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		state.InstallToken = strValue("")
 		state.InstallCommand = strValue("")
 		state.InstallExpiresAt = types.Int64Value(0)
+	}
+	if state.WaitForOnline.IsNull() {
+		state.WaitForOnline = types.BoolValue(true)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
@@ -434,6 +550,7 @@ type clusterAppModel struct {
 	DeletionProtection types.Bool           `tfsdk:"deletion_protection"`
 	Config             jsontypes.Normalized `tfsdk:"config"`
 	EffectiveConfig    jsontypes.Normalized `tfsdk:"effective_config"`
+	WaitForReady       types.Bool           `tfsdk:"wait_for_ready"`
 }
 
 func (r *clusterAppResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -444,7 +561,7 @@ func (r *clusterAppResource) Schema(_ context.Context, _ resource.SchemaRequest,
 	app := requiredReplaceString("One of `kafka` (Event Streams), `schemaRegistry` (Data Schemas), `connect` (Change Capture), `flink` (Stream Processing), `trino` (Data Explorer), `spark` (Batch Processing), `garage` (Object Storage) or `iceberg` (Iceberg Catalog).")
 	app.Validators = []validator.String{stringvalidator.OneOf(clusterApps...)}
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Turns on and configures one app on a cluster. `config` uses the same fields as the portal's app settings; leave a field out to use its default. Destroying the resource turns the app off, which fails while `deletion_protection` is on.",
+		MarkdownDescription: "Turns on and configures one app on a cluster. `config` uses the same fields as the portal's app settings; leave a field out to use its default. Destroying the resource turns the app off, which fails while `deletion_protection` is on.\n\nSome apps need another app first; add `depends_on` so Terraform turns them on in order and off in reverse: `schemaRegistry`, `connect` and `flink` need `kafka`; `iceberg` needs `garage`; `spark` and `trino` need `iceberg`.",
 		Attributes: map[string]schema.Attribute{
 			"workspace":  workspaceAttribute(),
 			"id":         idAttribute("`<cluster_id>/<app>`."),
@@ -462,6 +579,10 @@ func (r *clusterAppResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			"effective_config": schema.StringAttribute{
 				CustomType: jsontypes.NormalizedType{}, Computed: true,
 				MarkdownDescription: "All settings as stored, including defaults.",
+			},
+			"wait_for_ready": schema.BoolAttribute{
+				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				MarkdownDescription: "Wait until the app reports Ready with these settings (up to 20 minutes). Skipped while the cluster is offline, for example before the operator is installed.",
 			},
 		},
 	}
@@ -519,7 +640,18 @@ func (r *clusterAppResource) put(ctx context.Context, m *clusterAppModel, enable
 		body["deletionProtection"] = m.DeletionProtection.ValueBool()
 	}
 	p := clusterPath(m.ClusterID.ValueString()) + "/modules/" + client.PathEscape(m.App.ValueString())
-	return r.c.Put(ctx, p, m.Workspace.ValueString(), body, nil)
+	return withClusterLock(m.ClusterID.ValueString(), func() error {
+		return r.c.Put(ctx, p, m.Workspace.ValueString(), body, nil)
+	})
+}
+
+func (r *clusterAppResource) wait(ctx context.Context, m *clusterAppModel, diags *diag.Diagnostics) {
+	if !m.Enabled.ValueBool() || !m.WaitForReady.ValueBool() {
+		return
+	}
+	if err := waitAppReady(ctx, r.c, m.Workspace.ValueString(), m.ClusterID.ValueString(), m.App.ValueString()); err != nil {
+		apiError(diags, "wait for "+m.App.ValueString()+" to be ready", err)
+	}
 }
 
 func (r *clusterAppResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -537,6 +669,7 @@ func (r *clusterAppResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+	r.wait(ctx, &plan, &resp.Diagnostics)
 }
 
 func (r *clusterAppResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -558,6 +691,9 @@ func (r *clusterAppResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.State.RemoveResource(ctx)
 		return
 	}
+	if state.WaitForReady.IsNull() {
+		state.WaitForReady = types.BoolValue(true)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
@@ -576,6 +712,7 @@ func (r *clusterAppResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
+	r.wait(ctx, &plan, &resp.Diagnostics)
 }
 
 func (r *clusterAppResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

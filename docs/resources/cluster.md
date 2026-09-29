@@ -42,6 +42,7 @@ output "install_command" {
 - `operator_namespace` (String) Namespace for the operator.
 - `region` (String)
 - `tags` (List of String) Lowercase labels (up to 16).
+- `wait_for_online` (Boolean) For `gezor_hosted`, wait until the cluster is provisioned and connected (up to 30 minutes) so apps can be turned on in the same apply.
 - `workspace` (String) Workspace id or slug. Defaults to the provider's `workspace`. Changing it recreates the resource.
 
 ### Read-Only
