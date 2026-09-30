@@ -69,10 +69,12 @@ go test ./...                     # unit tests and the fake-API tests (needs ter
 go generate ./...                 # regenerate docs/ from the schemas, examples/ and templates/
 ```
 
-Live tests run against a real organization and create and delete resources:
+Live tests create and delete workspaces and make requests that fail on purpose, so they only run
+in a dedicated test organization. Set `GEZOR_TEST_ORG_ID` to its id; the tests stop if the token
+belongs to any other organization:
 
 ```sh
-TF_ACC=1 GEZOR_TOKEN=gzr_sa_... GEZOR_ENDPOINT=https://app.gezor.cloud \
+TF_ACC=1 GEZOR_TOKEN=gzr_sa_... GEZOR_TEST_ORG_ID=org_... GEZOR_ENDPOINT=https://app.gezor.cloud \
   GEZOR_TEST_CLUSTER_ID=cl_... go test ./internal/provider -run TestLive -v
 ```
 

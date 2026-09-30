@@ -67,5 +67,6 @@ jobs:
           TF_ACC: "1"
           GEZOR_ENDPOINT: ${{ vars.GEZOR_ENDPOINT }}
           GEZOR_WORKSPACE: ${{ vars.GEZOR_WORKSPACE }}
+          GEZOR_TEST_ORG_ID: ${{ vars.GEZOR_TEST_ORG_ID }}
           GEZOR_TEST_CLUSTER_ID: ${{ vars.GEZOR_TEST_CLUSTER_ID }}
           GEZOR_TOKEN: ${{ secrets.GEZOR_TOKEN }}

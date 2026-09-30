@@ -1,21 +1,52 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// Live tests against a real Gezor organization. Run with:
+// Live tests against a dedicated Gezor test organization. They create and delete workspaces and
+// make requests that fail on purpose, so they refuse to run anywhere else. Run with:
 //
-//	TF_ACC=1 GEZOR_TOKEN=gzr_sa_... [GEZOR_ENDPOINT=...] [GEZOR_TEST_CLUSTER_ID=cl_...] go test ./internal/provider -run TestLive
+//	TF_ACC=1 GEZOR_TOKEN=gzr_sa_... GEZOR_TEST_ORG_ID=org_... [GEZOR_ENDPOINT=...] [GEZOR_TEST_CLUSTER_ID=cl_...] go test ./internal/provider -run TestLive
 func liveCheck(t *testing.T) {
 	if os.Getenv("GEZOR_TOKEN") == "" {
 		t.Skip("GEZOR_TOKEN is not set")
 	}
+	want := os.Getenv("GEZOR_TEST_ORG_ID")
+	if want == "" {
+		t.Skip("GEZOR_TEST_ORG_ID is not set (the id of the dedicated test organization)")
+	}
+	if got, err := liveOrgID(); err != nil {
+		t.Fatalf("could not read the token's organization: %v", err)
+	} else if got != want {
+		t.Fatalf("GEZOR_TOKEN belongs to %s, not the test organization %s; refusing to run live tests", got, want)
+	}
+}
+
+var liveOrg struct {
+	once sync.Once
+	id   string
+	err  error
+}
+
+func liveOrgID() (string, error) {
+	liveOrg.once.Do(func() {
+		var me struct {
+			Organization struct {
+				ID string `json:"id"`
+			} `json:"organization"`
+		}
+		liveOrg.err = liveClient().Get(context.Background(), "/api/auth/me", "", &me)
+		liveOrg.id = me.Organization.ID
+	})
+	return liveOrg.id, liveOrg.err
 }
 
 func TestLiveRoleAndDataSources(t *testing.T) {
