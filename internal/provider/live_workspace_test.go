@@ -135,7 +135,7 @@ resource "gezor_sso_group_mappings" "entra" {
   workspace   = local.ws
   provider_id = gezor_sso_provider.entra.id
   mapping = [
-    { idp_group = %[11]q, role_id = data.gezor_roles.all.by_key["admin"] },
+    { idp_group = %[11]q, role_id = data.gezor_roles.all.by_key["analyst"] },
     { idp_group = "e2e-engineers", role_id = gezor_role.eng.id },
   ]
   default_role_id = data.gezor_roles.all.by_key["viewer"]
@@ -162,7 +162,7 @@ data "gezor_kms_keys" "e2e" {
 `, sfx, c.wsName, c.keyAlias, c.defaultKey, c.ssoName, c.lineage, c.mfa, c.sessionSeconds, c.rolePerms,
 			time.Now().Unix()%1_000_000_000_000, c.adminGroup)
 	}
-	first := v{"TF E2E " + sfx, "alias/e2e-a", "a", "E2E Entra", "e2e-admins", true, false, 43200, `"clusters.read", "pipelines.read"`}
+	first := v{"TF E2E " + sfx, "alias/e2e-a", "a", "E2E Entra", "e2e-analysts", true, false, 43200, `"clusters.read", "pipelines.read"`}
 	second := v{"TF E2E " + sfx + " renamed", "alias/e2e-a2", "b", "E2E Entra renamed", "e2e-platform", false, true, 28800, `"clusters.read", "clusters.manage", "pipelines.read"`}
 	ws := "gezor_workspace.e2e"
 
@@ -203,7 +203,7 @@ data "gezor_kms_keys" "e2e" {
 				resource.TestCheckResourceAttr("gezor_sso_provider.entra", "has_client_secret", "true"),
 				resource.TestCheckResourceAttrSet("gezor_sso_provider.entra", "redirect_uri"),
 				resource.TestCheckResourceAttr("gezor_sso_group_mappings.entra", "mapping.#", "2"),
-				resource.TestCheckResourceAttr("gezor_sso_group_mappings.entra", "mapping.0.idp_group", "e2e-admins"),
+				resource.TestCheckResourceAttr("gezor_sso_group_mappings.entra", "mapping.0.idp_group", "e2e-analysts"),
 				resource.TestCheckResourceAttr("gezor_sso_domain.e2e", "verified", "false"),
 				resource.TestCheckResourceAttrSet("gezor_sso_domain.e2e", "txt_record"),
 			),

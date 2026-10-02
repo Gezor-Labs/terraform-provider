@@ -1,3 +1,9 @@
+## Unreleased
+
+NOTES:
+
+* resource/gezor_sso_group_mappings: Mapped roles and `default_role_id` must be within the token's own permissions. API tokens never hold people-management permissions, so roles such as Admin can no longer be mapped from Terraform; map them in the portal. Examples now map Analyst instead.
+
 ## 0.1.2 (September 29, 2026)
 
 NOTES:

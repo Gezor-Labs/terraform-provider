@@ -2,12 +2,12 @@
 page_title: "gezor_sso_group_mappings (Resource) - Gezor"
 subcategory: "Single Sign-On"
 description: |-
-  Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings.
+  Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings. Every mapped role and the default role must be within the token's own permissions, so roles that manage people, such as Admin, can only be mapped in the portal.
 ---
 
 # gezor_sso_group_mappings (Resource)
 
-Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings.
+Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings. Every mapped role and the default role must be within the token's own permissions, so roles that manage people, such as Admin, can only be mapped in the portal.
 
 ## Example Usage
 
@@ -18,8 +18,8 @@ resource "gezor_sso_group_mappings" "entra" {
   provider_id = gezor_sso_provider.entra.id
 
   mapping = [
-    { idp_group = "gezor-admins", role_id = data.gezor_roles.all.by_key["admin"] },
     { idp_group = "data-engineering", role_id = gezor_role.data_engineer.id },
+    { idp_group = "analysts", role_id = data.gezor_roles.all.by_key["analyst"] },
   ]
 
   default_role_id = data.gezor_roles.all.by_key["viewer"]

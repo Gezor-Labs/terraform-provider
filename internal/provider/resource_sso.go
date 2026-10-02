@@ -248,7 +248,7 @@ func (r *ssoGroupMappingsResource) Metadata(_ context.Context, req resource.Meta
 
 func (r *ssoGroupMappingsResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings.",
+		MarkdownDescription: "Maps identity provider groups to workspace roles for one SSO provider. Manages the full list; destroying it clears the mappings. Every mapped role and the default role must be within the token's own permissions, so roles that manage people, such as Admin, can only be mapped in the portal.",
 		Attributes: map[string]schema.Attribute{
 			"workspace":   workspaceAttribute(),
 			"id":          idAttribute("Same as `provider_id`."),
